@@ -12,3 +12,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+backups/**
+*.vsix
+package-lock.json
+变更说明.md
+补全内容补充表.md

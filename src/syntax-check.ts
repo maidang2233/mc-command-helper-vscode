@@ -80,6 +80,13 @@ export class SyntaxChecker {
         } else if (r.mode === UNKNOWN_PATTERN && errors.length === 0) {
             errors = [{ message: "无法在库中找到命令“" + r.cmdname + "”的此类用法。" }];
         }
+        // hasitem 字段校验（只校验 hasitem，不影响其它选择器参数）
+        if (r.mode !== UNKNOWN_COMMAND) {
+            const hasItemErrors = this.validateHasItemSelectors(s);
+            if (hasItemErrors.length > 0) {
+                errors.push(...hasItemErrors);
+            }
+        }
         return {
             mode: r.mode,
             ok: r.mode >= 0 && errors.length === 0,
@@ -905,7 +912,9 @@ export class SyntaxChecker {
             len += parts[i].length + 1;
         }
         if (!ok) return { description: parts[i] + "不是数值" };
-        return { length: Math.min(len, ps.length), canFinish: parts.length >= 3 };
+        // 三个坐标之间每个部分都多算了一个空格；最后一个空格不属于本参数，
+        // 否则 procParams 会多吞一个字符，把后面的方块 ID 当成坐标的一部分。
+        return { length: Math.max(0, Math.min(len - 1, ps.length)), canFinish: parts.length >= 3 };
     }
 
     /**
@@ -1078,6 +1087,144 @@ export class SyntaxChecker {
         }
         r.canFinish = ps.length > 0;
         return r;
+    }
+
+    /* ================================================================
+     * hasitem 字段校验（只校验 hasitem）
+     * ================================================================ */
+    public validateHasItemSelectors(s: string): any[] {
+        const errors: any[] = [];
+        const selectors = this.extractSelectors(s);
+        for (const content of selectors) {
+            const segments = this.splitByComma(content);
+            for (const seg of segments) {
+                const eq = this.findTopLevelEqual(seg);
+                if (eq < 0) continue;
+                const key = seg.slice(0, eq).trim().toLowerCase();
+                if (key !== 'hasitem') continue;
+                this.validateHasItemValue(seg.slice(eq + 1).trim(), errors);
+            }
+        }
+        return errors;
+    }
+
+    private isValidListValue(value: string, listName: string): boolean {
+        const list = this.library.enums && this.library.enums[listName];
+        if (!list) return true;
+        let v = value.trim();
+        if (v.startsWith('!')) v = v.slice(1);
+        if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+        const key = v.includes(':') ? v.split(':').pop() : v;
+        const lower = (key || '').toLowerCase();
+        if (Array.isArray(list)) {
+            return list.some((x: any) => String(typeof x === 'string' ? x : (x.text || x.name || x.id || '')).toLowerCase() === lower);
+        }
+        if (typeof list === 'object') {
+            return Object.keys(list).some((k) => k.toLowerCase() === lower);
+        }
+        return true;
+    }
+
+    private validateHasItemObject(inner: string, errors: any[]): void {
+        const hasitem = this.library.selectors && this.library.selectors.hasitem;
+        const fields = (hasitem && hasitem.fields) || {};
+        let hasItem = false;
+        for (const seg of this.splitByComma(inner)) {
+            const x = seg.trim();
+            if (!x) continue;
+            const eq = this.findTopLevelEqual(x);
+            if (eq < 0) {
+                errors.push({ message: `hasitem 字段格式不正确：${x}` });
+                continue;
+            }
+            const k = x.slice(0, eq).trim().toLowerCase();
+            const val = x.slice(eq + 1).trim();
+            if (!fields[k]) {
+                errors.push({ message: `hasitem 中不存在字段“${k}”` });
+                continue;
+            }
+            if (k === 'item') {
+                hasItem = true;
+                if (!this.isValidListValue(val, 'item')) {
+                    errors.push({ message: `hasitem 的 item 不是有效物品：${val}` });
+                }
+            } else if (k === 'data' || k === 'quantity' || k === 'slot') {
+                if (!/^\d+$/.test(val)) {
+                    errors.push({ message: `hasitem 的 ${k} 必须是整数：${val}` });
+                }
+            } else if (k === 'location') {
+                if (!this.isValidListValue(val, 'entitySlot')) {
+                    errors.push({ message: `hasitem 的 location 不是有效槽位：${val}` });
+                }
+            }
+        }
+        if (!hasItem) {
+            errors.push({ message: "hasitem 缺少 item 字段" });
+        }
+    }
+
+    private validateHasItemValue(value: string, errors: any[]): void {
+        const v = (value || '').trim();
+        if (!v) return;
+        const open = v[0];
+        if (open !== '{' && open !== '[') {
+            errors.push({ message: "hasitem 的值必须是 {…} 或 […]" });
+            return;
+        }
+        const close = open === '{' ? '}' : ']';
+        if (!v.endsWith(close)) {
+            errors.push({ message: `hasitem 缺少 ${close}` });
+            return;
+        }
+        const inner = v.slice(1, -1).trim();
+        if (open === '{') {
+            this.validateHasItemObject(inner, errors);
+        } else {
+            for (const el of this.splitByComma(inner)) {
+                const x = el.trim();
+                if (!x) continue;
+                if (x.startsWith('{') && x.endsWith('}')) {
+                    this.validateHasItemObject(x.slice(1, -1), errors);
+                } else if (x.startsWith('[') && x.endsWith(']')) {
+                    this.validateHasItemValue(x, errors);
+                } else {
+                    errors.push({ message: `hasitem 数组元素格式不正确：${x}` });
+                }
+            }
+        }
+    }
+
+    private extractSelectors(s: string): string[] {
+        const out: string[] = [];
+        let inQuote = false;
+        for (let i = 0; i < s.length; i++) {
+            const ch = s[i];
+            if (ch === '\\') { i++; continue; }
+            if (ch === '"') { inQuote = !inQuote; continue; }
+            if (inQuote) continue;
+            if (ch !== '@' || !/[a-zA-Z]/.test(s[i + 1] || '') || s[i + 2] !== '[') continue;
+
+            let bracketDepth = 0;
+            let quote = false;
+            let j = i + 2;
+            let closed = false;
+            for (; j < s.length; j++) {
+                const c = s[j];
+                if (c === '\\') { j++; continue; }
+                if (c === '"') { quote = !quote; continue; }
+                if (quote) continue;
+                if (c === '[') {
+                    bracketDepth++;
+                } else if (c === ']') {
+                    bracketDepth--;
+                    if (bracketDepth === 0) { closed = true; break; }
+                }
+            }
+            if (!closed) break;
+            out.push(s.slice(i + 3, j));
+            i = j;
+        }
+        return out;
     }
 
     /**

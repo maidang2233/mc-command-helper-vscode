@@ -2,7 +2,7 @@
   "name": "mc-command-helper",
   "displayName": "mc-command-helper",
   "description": "我的世界指令助手",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "maidang2233",
   "engines": {
     "vscode": "^1.70.0"
@@ -11,11 +11,11 @@
     "Other"
   ],
   "activationEvents": [
-  "onLanguage:mcfunction",
-  "onLanguage:bc-mcfunction",
-  "onLanguage:plaintext",
-  "onStartupFinished"
-],
+    "onLanguage:mcfunction",
+    "onLanguage:bc-mcfunction",
+    "onLanguage:plaintext",
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -33,9 +33,54 @@
         "aliases": [
           "MCFunction",
           "mcfunction"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "bc-mcfunction",
+        "scopeName": "source.bc.minecraft.mcfunction",
+        "path": "./syntaxes/mcfunction.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Minecraft 指令助手",
+      "properties": {
+        "mc-command-helper.previewSide": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ],
+          "enumDescriptions": [
+            "预览显示在光标右侧",
+            "预览显示在光标左侧，光标在预览右侧"
+          ],
+          "default": "right",
+          "description": "补全预览相对光标的位置"
+        }
+      }
+    },
+    "configurationDefaults": {
+      "editor.suggest.maxVisibleSuggestions": 10,
+      "[bc-mcfunction]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "on"
+        },
+        "editor.suggestOnTriggerCharacters": true
+      },
+      "[mcfunction]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "on"
+        },
+        "editor.suggestOnTriggerCharacters": true
+      }
+    },
     "keybindings": [
       {
         "key": "down",
@@ -56,6 +101,58 @@
         "key": "ctrl+up",
         "command": "mc-command-helper.prevSuggestion",
         "when": "suggestWidgetVisible && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "tab",
+        "command": "mc-command-helper.prefillTab",
+        "when": "suggestWidgetVisible && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "tab",
+        "command": "mc-command-helper.prefillTab",
+        "when": "mc-command-helper.prefillActive && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "space",
+        "command": "mc-command-helper.spaceMaybeAccept",
+        "when": "suggestWidgetVisible && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "space",
+        "command": "mc-command-helper.prefillCommit",
+        "when": "mc-command-helper.prefillActive && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "backspace",
+        "command": "mc-command-helper.deleteAndSuggest",
+        "args": "left",
+        "when": "!suggestWidgetVisible && !editorReadonly && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "delete",
+        "command": "mc-command-helper.deleteAndSuggest",
+        "args": "right",
+        "when": "!suggestWidgetVisible && !editorReadonly && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "ctrl+alt+f10",
+        "command": "mc-command-helper.diagnosePreview",
+        "when": "textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "ctrl+alt+shift+f10",
+        "command": "mc-command-helper.diagnosePreviewVisible",
+        "when": "suggestWidgetVisible && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "escape",
+        "command": "mc-command-helper.hideSuggestAndClearPreview",
+        "when": "suggestWidgetVisible && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
+      },
+      {
+        "key": "escape",
+        "command": "mc-command-helper.prefillCancel",
+        "when": "mc-command-helper.prefillActive && textInputFocus && (editorLangId == bc-mcfunction || editorLangId == mcfunction || editorLangId == plaintext)"
       }
     ]
   },
